@@ -1,11 +1,14 @@
 package service
 
 import (
+	"gin_gorm_oj/define"
 	"gin_gorm_oj/helper"
 	"gin_gorm_oj/models"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"log"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -95,7 +98,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	token, err := helper.GenerateToken(data.Identity, data.Name)
+	token, err := helper.GenerateToken(data.Identity, data.Name, data.IsAdmin)
 
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -182,6 +185,26 @@ func Register(c *gin.Context) {
 
 	phone := c.PostForm("phone")
 
+	// 检查邮箱是否已注册
+	var count int64
+	err := models.DB.Model(new(models.UserBasic)).Where("email = ?", email).Count(&count).Error
+
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code": -1,
+			"msg":  "Get User Info Error:" + err.Error(),
+		})
+		return
+	}
+
+	if count > 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"code": -1,
+			"msg":  "current email is exists",
+		})
+		return
+	}
+
 	// 验证码检查
 	sendCode, err := models.RDB.Get(c, email).Result()
 	if err != nil {
@@ -199,24 +222,6 @@ func Register(c *gin.Context) {
 		return
 	}
 	// 数据插入
-	var count int64
-	err = models.DB.Model(new(models.UserBasic)).Where("email = ?", email).Count(&count).Error
-
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"code": -1,
-			"msg":  "Get User Info Error:" + err.Error(),
-		})
-		return
-	}
-
-	if count > 0 {
-		c.JSON(http.StatusOK, gin.H{
-			"code": -1,
-			"msg":  "current email is exists",
-		})
-		return
-	}
 
 	userIdentity := helper.GenerateUUid()
 	data := &models.UserBasic{
@@ -236,7 +241,7 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	token, err := helper.GenerateToken(userIdentity, name)
+	token, err := helper.GenerateToken(userIdentity, name, data.IsAdmin)
 
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -250,6 +255,44 @@ func Register(c *gin.Context) {
 		"code": 200,
 		"data": map[string]interface{}{
 			"token": token,
+		},
+	})
+}
+
+// GetRankList
+// @Tags 公共方法
+// @Summary 用户排行榜
+// @Param page query int false "page"
+// @Param size query int false "size"
+// @Success 200 {string} json "{"code":"200", "msg":"", "data":""}"
+// @Router /rank-list [get]
+func GetRankList(c *gin.Context) {
+	size, err := strconv.Atoi(c.DefaultQuery("size", define.DefaultSize))
+	page, err := strconv.Atoi(c.DefaultQuery("page", define.DefaultPage))
+	if err != nil {
+		log.Println("getProblemList Page strconv err : ", err)
+		return
+	}
+	page = (page - 1) * size // 起始位置
+	var count int64
+	data := make([]*models.UserBasic, 0)
+	err = models.DB.Model(new(models.UserBasic)).Count(&count).
+		Order("finish_problem_num DESC, submit_num ASC").
+		Offset(page).Limit(size).Find(&data).Error
+
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code": 200,
+			"msg":  "Get Rank List Error:" + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"data": map[string]interface{}{
+			"count": count,
+			"list":  data,
 		},
 	})
 }

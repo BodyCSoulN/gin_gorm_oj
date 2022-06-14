@@ -1,7 +1,9 @@
 package service
 
 import (
+	"encoding/json"
 	"gin_gorm_oj/define"
+	"gin_gorm_oj/helper"
 	"gin_gorm_oj/models"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -96,4 +98,111 @@ func GetProblemDetail(c *gin.Context) {
 		"data": problemBaisc,
 	})
 
+}
+
+// CreateProblem
+// @Tags 私有方法
+// @Summary 创建问题
+// @Param token header string true "token"
+// @Param title formData string true "title"
+// @Param content formData string true "content"
+// @Param max_runtime formData int false "max_runtime"
+// @Param max_memory formData int false "max_memory"
+// @Param category_ids formData array false "category_ids"
+// @Param test_cases formData array true "test_cases"
+// @Success 200 {string} json "{"code":"200", "msg":"", "data":""}"
+// @Router /create-problem [post]
+func CreateProblem(c *gin.Context) {
+	title := c.PostForm("title")
+	content := c.PostForm("content")
+	max_runtime, _ := strconv.Atoi(c.PostForm("max_runtime"))
+	max_memory, _ := strconv.Atoi(c.PostForm("max_memory"))
+	category_ids := c.PostFormArray("category_ids")
+	test_cases := c.PostFormArray("test_cases")
+
+	if title == "" || content == "" ||
+		len(category_ids) == 0 || len(test_cases) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"code": -1,
+			"msg":  "params can not be null",
+		})
+
+		return
+	}
+
+	identity := helper.GenerateUUid()
+
+	data := models.ProblemBasic{
+		Identity:   identity,
+		Title:      title,
+		Content:    content,
+		MaxRuntime: max_runtime,
+		MaxMem:     max_memory,
+	}
+
+	// 处理分类
+	ProblemCategories := make([]*models.ProblemCategory, 0)
+	for _, id := range category_ids {
+		categoryId, _ := strconv.Atoi(id)
+		ProblemCategories = append(ProblemCategories, &models.ProblemCategory{
+			ProblemId:  data.ID,
+			CategoryId: uint(categoryId),
+		})
+	}
+	data.ProblemCategories = ProblemCategories
+
+	// 处理测试用例
+	testCases := make([]*models.TestCase, 0)
+	for _, testCase := range test_cases {
+		caseMap := make(map[string]string)
+		err := json.Unmarshal([]byte(testCase), &caseMap)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"code": -1,
+				"msg":  "Wrong Format of Test Case" + err.Error(),
+			})
+			return
+		}
+
+		if _, ok := caseMap["input"]; !ok {
+			c.JSON(http.StatusOK, gin.H{
+				"code": -1,
+				"msg":  "Wrong Format of Test Case" + err.Error(),
+			})
+			return
+		}
+		if _, ok := caseMap["output"]; !ok {
+			c.JSON(http.StatusOK, gin.H{
+				"code": -1,
+				"msg":  "Wrong Format of Test Case" + err.Error(),
+			})
+			return
+		}
+
+		testCases = append(testCases, &models.TestCase{
+			Identity:        helper.GenerateUUid(),
+			ProblemIdentity: identity,
+			Input:           caseMap["input"],
+			Output:          caseMap["output"],
+		})
+	}
+
+	data.TestCases = testCases
+
+	// 创建问题
+	err := models.DB.Create(data).Error
+
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code": -1,
+			"msg":  "Create Problem Error:" + err.Error(),
+		})
+
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"data": map[string]interface{}{},
+	})
 }

@@ -16,6 +16,7 @@ import (
 type UserClaims struct {
 	Identity string `json:"identity"`
 	Name     string `json:"name"`
+	IsAdmin  int    `json:"is_admin"'`
 	jwt.RegisteredClaims
 }
 
@@ -27,10 +28,11 @@ func GetMd5(s string) string {
 var myKey = []byte("gin-gorm-oj-key")
 
 // GenerateToken 生成token
-func GenerateToken(identity, name string) (string, error) {
+func GenerateToken(identity, name string, isAdmin int) (string, error) {
 	UserClaim := &UserClaims{
 		Identity:         identity,
 		Name:             name,
+		IsAdmin:          isAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{},
 	}
 

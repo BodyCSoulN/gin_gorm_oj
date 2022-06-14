@@ -16,6 +16,7 @@ func Router() *gin.Engine {
 
 	// 配置路由规则
 
+	// 公有方法
 	// 问题
 	r.GET("/problem-list", service.GetProblemList)
 	r.GET("/problem-detail", service.GetProblemDetail)
@@ -25,10 +26,14 @@ func Router() *gin.Engine {
 	r.POST("/login", service.Login)
 	r.POST("/send-code", service.SendVerifyCode)
 	r.POST("/register", service.Register)
+	// 排行榜
+	r.GET("/rank-list", service.GetRankList)
 
 	// 提交列表
 	r.GET("/submit-list", service.GetSubmitList)
 
+	// 管理员私有方法
+	r.POST("/create-problem", service.CreateProblem)
 	return r
 
 }
